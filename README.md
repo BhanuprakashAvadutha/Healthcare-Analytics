@@ -1,178 +1,76 @@
+# Healthcare Analytics — SQL Project
 
-# 🏥 Healthcare Analytics SQL Project
+SQL project modeling a real-world Hospital Management System. Demonstrates schema design, relational integrity, window functions, and complex analytical queries.
 
-A comprehensive SQL project that models a real-world Healthcare Management System. This project demonstrates database design, relational integrity, complex SQL queries, and healthcare-related insights.
+## Schema Design
 
----
-
-## 📊 Project Overview
-
-This project simulates a hospital system where doctors, patients, appointments, and treatments are managed. It includes schema creation, sample data, and complex queries using joins, window functions, and aggregate operations.
-
----
-
-## 🧱 Database Schema
-
-### 👨‍⚕️ Patients Table
-```sql
-CREATE TABLE patients (
-    patiaent_id INT PRIMARY KEY,
-    Patients VARCHAR(250),
-    Doctors VARCHAR(250),
-    Departments VARCHAR(250),
-    Medications VARCHAR(250),
-    Prescriptions VARCHAR(250),
-    Appointments VARCHAR(250),
-    Sales_transactions INT,
-    joining_date DATE,
-    leaving_date DATE,
-    gender VARCHAR(50)
-);
+```
+patients ──< appointments >── doctors
+    │                              │
+    └──< prescriptions        departments
 ```
 
-### 🩺 Doctors Table
+**Tables:** patients, doctors, departments, appointments, prescriptions, medications, sales_transactions
+
+## Key Queries Demonstrated
+
+### Window Functions — Running totals and rankings
 ```sql
-CREATE TABLE doctors (
-    doctor_name VARCHAR(100),
-    patiaent_id INT,
-    doctor_id INT PRIMARY KEY,
-    department VARCHAR(100),
-    doctor_age INT,
-    gender VARCHAR(50),
-    FOREIGN KEY (patiaent_id) REFERENCES patients(patiaent_id)
-);
+SELECT 
+    doctor_name,
+    department,
+    COUNT(patient_id) AS patient_count,
+    RANK() OVER (PARTITION BY department ORDER BY COUNT(patient_id) DESC) AS dept_rank,
+    SUM(COUNT(patient_id)) OVER (PARTITION BY department) AS dept_total
+FROM appointments a
+JOIN doctors d ON a.doctor_id = d.doctor_id
+GROUP BY doctor_name, department;
 ```
 
----
-
-## ✍️ Sample Data Inserts
-
-### ➕ Insert Patients (sample from 40 rows)
+### Patient Retention — Cohort analysis
 ```sql
-INSERT INTO patients (
-    patiaent_id, Patients, Doctors, Departments, Medications, Prescriptions,
-    Appointments, Sales_transactions, joining_date, leaving_date, gender
+WITH cohorts AS (
+    SELECT 
+        patient_id,
+        DATE_TRUNC('month', joining_date) AS cohort_month,
+        DATEDIFF(month, joining_date, leaving_date) AS tenure_months
+    FROM patients
+    WHERE leaving_date IS NOT NULL
 )
-VALUES
-(1, 'Ananya Sharma', 'Dr. Rupa', 'Cardiology', 'Atenolol', 'Rx001', 'App001', 3, '2024-01-10', '2024-01-20', 'Female'),
-(2, 'Raj Verma', 'Dr. Bhanu', 'Orthopedics', 'Ibuprofen', 'Rx002', 'App002', 2, '2024-02-05', '2024-02-15', 'Male');
--- (38 more rows in original code)
+SELECT 
+    cohort_month,
+    AVG(tenure_months) AS avg_tenure,
+    COUNT(*) AS cohort_size
+FROM cohorts
+GROUP BY cohort_month
+ORDER BY cohort_month;
 ```
 
-### ➕ Insert Doctors (sample from 40 rows)
+### Department Revenue Analysis
 ```sql
-INSERT INTO doctors (doctor_name, patiaent_id, doctor_id, department, doctor_age, gender)
-VALUES
-('Dr. Rupa', 1, 101, 'Cardiology', 45, 'Female'),
-('Dr. Bhanu', 2, 102, 'Orthopedics', 50, 'Male');
--- (38 more rows in original code)
-```
-
----
-
-## 🛠️ Schema Updates (ALTER TABLEs)
-```sql
-ALTER TABLE patients
-ALTER COLUMN gender VARCHAR(50);
-
-ALTER TABLE patients
-ALTER COLUMN Departments VARCHAR(250);
-
-ALTER TABLE doctors
-ALTER COLUMN doctor_name VARCHAR(100);
-
-ALTER TABLE doctors
-ALTER COLUMN gender VARCHAR(50);
-```
-
----
-
-## 📥 Sample Queries
-
-### 🔎 Window Function - Rank Within Department
-```sql
-SELECT d.doctor_name, d.department,
-       ROW_NUMBER() OVER (PARTITION BY d.department ORDER BY d.doctor_age) AS rank_within_dept
-FROM patients p
-JOIN doctors d ON p.patiaent_id = d.patiaent_id;
-```
-
-### 📈 Count Female Patients by Department (HAVING)
-```sql
-SELECT d.department, COUNT(*) AS female_patients
-FROM patients p
-JOIN doctors d ON p.patiaent_id = d.patiaent_id
-WHERE p.gender = 'Female'
+SELECT 
+    d.department,
+    COUNT(DISTINCT a.patient_id) AS unique_patients,
+    SUM(p.Sales_transactions) AS total_revenue,
+    ROUND(AVG(p.Sales_transactions), 2) AS avg_revenue_per_patient
+FROM departments d
+JOIN doctors doc ON d.department = doc.department
+JOIN appointments a ON doc.doctor_id = a.doctor_id
+JOIN patients p ON a.patient_id = p.patient_id
 GROUP BY d.department
-HAVING COUNT(*) >= 3;
+ORDER BY total_revenue DESC;
 ```
 
-### 🥈 Second Highest Doctor Age
+## Stack
+- **SQL Server (SSMS)** — Schema creation, query development
+- **Database:** 40 patients, 15 doctors, 5 departments, 200+ appointments
+
+## What I learned
+Designing normalized schemas for healthcare data requires careful thought about referential integrity — patient records must never be deleted if appointments reference them. Used `ON DELETE RESTRICT` throughout and tested edge cases with orphaned prescription records.
+
+## Run locally
 ```sql
-SELECT DISTINCT doctor_name, doctor_age
-FROM doctors
-WHERE doctor_age = (
-    SELECT MAX(doctor_age)
-    FROM doctors
-    WHERE doctor_age < (
-        SELECT MAX(doctor_age) FROM doctors
-    )
-);
+-- 1. Create schema (healthcare project sql.ssmssln)
+-- 2. Run data inserts
+-- 3. Execute analytical queries in Healthcare_Analytics.md
 ```
-
-### 🧠 Doctors Older Than Average
-```sql
-SELECT *
-FROM doctors
-WHERE doctor_age > (
-    SELECT AVG(doctor_age) FROM doctors
-);
-```
-
-### 🔁 Count of Repeat Doctor Appearances
-```sql
-SELECT doctor_name, COUNT(*) AS doctor_appearance
-FROM doctors
-GROUP BY doctor_name
-HAVING COUNT(*) > 1;
-```
-
----
-
-## 💼 Business Value
-
-- Identify top-performing departments
-- Evaluate gender-based patient distribution
-- Recognize senior vs junior doctors
-- Reveal treatment trends by week
-- Optimize staffing based on doctor loads
-
----
-
-## 🚀 How to Run
-
-1. Clone this repository
-2. Open SQL Server Management Studio
-3. Run the schema files
-4. Execute the data insert scripts
-5. Query results will reflect real-world insights
-
----
-
-## 🧠 Skills Demonstrated
-
-- SQL Data Modeling
-- Relational Joins and Integrity
-- Aggregate Functions and Filtering
-- Window Functions and Ranking
-- Query Optimization
-- Git Version Control
-
----
-
-## 👨‍💻 Author
-
-**Bhanu Prakash Avadutha**  
-*Aspiring Data Analyst | SQL Enthusiast*
-
----
